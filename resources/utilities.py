@@ -26,8 +26,8 @@ def hexswap(input_hex: str):
 
 
 def string_to_hex(input_string):
-    if not (len(input_string) % 2) == 0:
-        input_string = "0" + input_string
+    if len(input_string) % 2 != 0:
+        input_string = f"0{input_string}"
     input_string = hexswap(input_string)
     input_string = binascii.unhexlify(input_string)
     return input_string
@@ -36,7 +36,7 @@ def string_to_hex(input_string):
 def process_status(process_result):
     if process_result.returncode != 0:
         logging.info(f"Process failed with exit code {process_result.returncode}")
-        logging.info(f"Please report the issue on the Discord server")
+        logging.info("Please report the issue on the Discord server")
         raise Exception(f"Process result: \n{process_result.stdout.decode()}")
 
 
@@ -73,8 +73,11 @@ def check_recovery():
 def get_disk_path():
     root_partition_info = plistlib.loads(subprocess.run("diskutil info -plist /".split(), stdout=subprocess.PIPE).stdout.decode().strip().encode())
     root_mount_path = root_partition_info["DeviceIdentifier"]
-    root_mount_path = root_mount_path[:-2] if root_mount_path.count("s") > 1 else root_mount_path
-    return root_mount_path
+    return (
+        root_mount_path[:-2]
+        if root_mount_path.count("s") > 1
+        else root_mount_path
+    )
 
 def check_if_root_is_apfs_snapshot():
     root_partition_info = plistlib.loads(subprocess.run("diskutil info -plist /".split(), stdout=subprocess.PIPE).stdout.decode().strip().encode())
@@ -88,10 +91,7 @@ def check_if_root_is_apfs_snapshot():
 def check_seal():
     # 'Snapshot Sealed' property is only listed on booted snapshots
     sealed = subprocess.run(["diskutil", "apfs", "list"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if "Snapshot Sealed:           Yes" in sealed.stdout.decode():
-        return True
-    else:
-        return False
+    return "Snapshot Sealed:           Yes" in sealed.stdout.decode()
 
 def check_filesystem_type():
     # Expected to return 'apfs' or 'hfs'
@@ -107,10 +107,7 @@ def csr_decode(os_sip):
 
     # Can be adjusted to whatever OS needs patching
     sip_needs_change = all(sip_data.system_integrity_protection.csr_values[i] for i in os_sip)
-    if sip_needs_change is True:
-        return False
-    else:
-        return True
+    return not sip_needs_change
 
 
 def friendly_hex(integer: int):
@@ -140,27 +137,22 @@ def check_kext_loaded(kext_name, os_version):
         kext_loaded = subprocess.run(["kmutil", "showloaded", "--list-only", "--variant-suffix", "release"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     else:
         kext_loaded = subprocess.run(["kextstat", "-l"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if kext_name in kext_loaded.stdout.decode():
-        return True
-    else:
-        return False
+    return kext_name in kext_loaded.stdout.decode()
 
 
 def check_oclp_boot():
-    if get_nvram("OCLP-Version", "4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102", decode=True):
-        return True
-    else:
-        return False
+    return bool(
+        get_nvram(
+            "OCLP-Version", "4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102", decode=True
+        )
+    )
 
 
 def check_monterey_wifi():
     IO80211ElCap = "com.apple.iokit.IO80211ElCap"
     CoreCaptureElCap = "com.apple.driver.corecaptureElCap"
     loaded_kexts: str = subprocess.run("kextcache".split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode()
-    if IO80211ElCap in loaded_kexts and CoreCaptureElCap in loaded_kexts:
-        return True
-    else:
-        return False
+    return IO80211ElCap in loaded_kexts and CoreCaptureElCap in loaded_kexts
 
 
 def check_metal_support(device_probe, computer):
@@ -184,25 +176,28 @@ def check_metal_support(device_probe, computer):
 
 
 def check_filevault_skip():
-    # Check whether we can skip FileVault check with Root Patching
-    nvram = get_nvram("OCLP-Settings", "4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102", decode=True)
-    if nvram:
+    if nvram := get_nvram(
+        "OCLP-Settings", "4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102", decode=True
+    ):
         if "-allow_fv" in nvram:
             return True
     return False
 
 
 def check_secure_boot_model():
-    sbm_byte = get_nvram("HardwareModel", "94B73556-2197-4702-82A8-3E1337DAFBFB", decode=False)
-    if sbm_byte:
+    if sbm_byte := get_nvram(
+        "HardwareModel", "94B73556-2197-4702-82A8-3E1337DAFBFB", decode=False
+    ):
         sbm_byte = sbm_byte.replace(b"\x00", b"")
-        sbm_string = sbm_byte.decode("utf-8")
-        return sbm_string
+        return sbm_byte.decode("utf-8")
     return None
 
 def check_ap_security_policy():
-    ap_security_policy_byte = get_nvram("AppleSecureBootPolicy", "94B73556-2197-4702-82A8-3E1337DAFBFB", decode=False)
-    if ap_security_policy_byte:
+    if ap_security_policy_byte := get_nvram(
+        "AppleSecureBootPolicy",
+        "94B73556-2197-4702-82A8-3E1337DAFBFB",
+        decode=False,
+    ):
         # Supported Apple Secure Boot Policy values:
         #     AppleImg4SbModeDisabled = 0,
         #     AppleImg4SbModeMedium   = 1,
@@ -223,10 +218,7 @@ def check_secure_boot_level():
         #   - On genuine non-T2 Macs, they always return 0
         #   - T2 Macs will return based on their Startup Policy (Full(2), Medium(1), Disabled(0))
         # Ref: https://support.apple.com/en-us/HT208198
-        if check_ap_security_policy() != 0:
-            return True
-        else:
-            return False
+        return check_ap_security_policy() != 0
     return False
 
 
@@ -235,19 +227,13 @@ def patching_status(os_sip, os):
     sip_enabled = True  #  System Integrity Protection
     sbm_enabled = True  #  Secure Boot Status (SecureBootModel)
     fv_enabled = True  #   FileVault
-    dosdude_patched = True
-
     gen6_kext = "/System/Library/Extension/AppleIntelHDGraphics.kext"
     gen7_kext = "/System/Library/Extension/AppleIntelHD3000Graphics.kext"
 
 
     sbm_enabled = check_secure_boot_level()
 
-    if os > os_data.os_data.yosemite:
-        sip_enabled = csr_decode(os_sip)
-    else:
-        sip_enabled = False
-
+    sip_enabled = csr_decode(os_sip) if os > os_data.os_data.yosemite else False
     if os > os_data.os_data.catalina and not check_filevault_skip():
         # Assume non-OCLP Macs do not have our APFS seal patch
         fv_status: str = subprocess.run("fdesetup status".split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode()
@@ -256,9 +242,7 @@ def patching_status(os_sip, os):
     else:
         fv_enabled = False
 
-    if not (Path(gen6_kext).exists() and Path(gen7_kext).exists()):
-        dosdude_patched = False
-
+    dosdude_patched = bool(Path(gen6_kext).exists() and Path(gen7_kext).exists())
     return sip_enabled, sbm_enabled, fv_enabled, dosdude_patched
 
 
@@ -285,10 +269,7 @@ def check_command_line_tools():
     # Determine whether Command Line Tools exist
     # xcode-select -p
     xcode_select = subprocess.run("xcode-select -p".split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if xcode_select.returncode == 0:
-        return True
-    else:
-        return False
+    return xcode_select.returncode == 0
 
 def get_nvram(variable: str, uuid: str = None, *, decode: bool = False):
     # TODO: Properly fix for El Capitan, which does not print the XML representation even though we say to
@@ -378,8 +359,10 @@ def find_apfs_physical_volume(device):
             #      APFSPhysicalStore: disk0s2
             #  - 1:
             #      APFSPhysicalStore: disk3s2
-            for disk in disk_list["APFSPhysicalStores"]:
-                physical_disks.append(disk["APFSPhysicalStore"])
+            physical_disks.extend(
+                disk["APFSPhysicalStore"]
+                for disk in disk_list["APFSPhysicalStores"]
+            )
         except KeyError:
             pass
     return physical_disks
@@ -395,7 +378,7 @@ def clean_device_path(device_path: str):
     #   'None'
 
     if device_path:
-        if not any(partition in device_path for partition in ["GPT", "MBR"]):
+        if all(partition not in device_path for partition in ["GPT", "MBR"]):
             return None
         device_path_array = device_path.split("/")
         # we can always assume [-1] is 'EFI\OC\OpenCore.efi'
@@ -467,11 +450,10 @@ def block_os_updaters():
         pid = entry[0].decode()
         current_process = entry[3].decode()
         for bad_process in bad_processes:
-            if bad_process in current_process:
-                if pid != "":
-                    logging.info(f"- Killing Process: {pid} - {current_process.split('/')[-1]}")
-                    subprocess.run(["kill", "-9", pid])
-                    break
+            if bad_process in current_process and pid != "":
+                logging.info(f"- Killing Process: {pid} - {current_process.split('/')[-1]}")
+                subprocess.run(["kill", "-9", pid])
+                break
 
 def check_boot_mode():
     # Check whether we're in Safe Mode or not

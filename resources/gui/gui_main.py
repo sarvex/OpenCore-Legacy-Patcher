@@ -88,7 +88,11 @@ class wx_python_gui:
             self.menubar = wx.MenuBar()
             self.file_menu = wx.Menu()
             self.file_menu.Append(wx.ID_EXIT, "Quit", "Quit Application" )
-            self.file_menu.Append(wx.ID_REDO, f"Relaunch as Root (UID: {int(current_uid)})", "Relaunch OpenCore Legacy Patcher as Root")
+            self.file_menu.Append(
+                wx.ID_REDO,
+                f"Relaunch as Root (UID: {current_uid})",
+                "Relaunch OpenCore Legacy Patcher as Root",
+            )
             self.menubar.Append(self.file_menu, "File")
             self.frame.Bind(wx.EVT_MENU, self.OnCloseFrame, id=wx.ID_EXIT)
             self.frame.Bind(wx.EVT_MENU, self.relaunch_as_root, id=wx.ID_REDO)
@@ -149,27 +153,28 @@ class wx_python_gui:
                 self.frame_modal.ShowWithoutActivating()
 
     def use_non_metal_alternative(self):
-        if self.constants.detected_os >= os_data.os_data.monterey:
-            if Path("/System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/SkyLightOld.dylib").exists():
-                if self.constants.host_is_non_metal is True:
-                    return True
-        return False
+        return bool(
+            self.constants.detected_os >= os_data.os_data.monterey
+            and Path(
+                "/System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/SkyLightOld.dylib"
+            ).exists()
+            and self.constants.host_is_non_metal is True
+        )
 
     def is_unpack_finished(self):
         if not self.constants.unpack_thread.is_alive():
             if Path(self.constants.payload_kexts_path).exists():
                 return True
-            else:
-                # Raise error to end program
-                self.popup = wx.MessageDialog(
-                    self.frame,
-                    f"During unpacking of our internal files, we seemed to have encountered an error.\n\nIf you keep seeing this error, please try rebooting and redownloading the application.",
-                    "Internal Error occurred!",
-                    style = wx.OK | wx.ICON_EXCLAMATION
-                )
-                self.popup.ShowModal()
-                self.frame.Freeze()
-                self.OnCloseFrame(None)
+            # Raise error to end program
+            self.popup = wx.MessageDialog(
+                self.frame,
+                f"During unpacking of our internal files, we seemed to have encountered an error.\n\nIf you keep seeing this error, please try rebooting and redownloading the application.",
+                "Internal Error occurred!",
+                style = wx.OK | wx.ICON_EXCLAMATION
+            )
+            self.popup.ShowModal()
+            self.frame.Freeze()
+            self.OnCloseFrame(None)
         return False
 
     def pulse_alternative(self, progress_bar):
@@ -224,7 +229,7 @@ class wx_python_gui:
             return False
 
         application_plist = plistlib.load(application_plist_path.open("rb"))
-        if not "CFBundleShortVersionString" in application_plist:
+        if "CFBundleShortVersionString" not in application_plist:
             return False
 
         application_version = application_plist["CFBundleShortVersionString"].split(".")
@@ -307,8 +312,10 @@ class wx_python_gui:
         if ignore_updates is not True:
             self.constants.ignore_updates = False
             self.constants.has_checked_updates = True
-            dict = updates.CheckBinaryUpdates(self.constants).check_binary_updates()
-            if dict:
+            if dict := updates.CheckBinaryUpdates(
+                self.constants
+            ).check_binary_updates():
+                did_find_update = True
                 for entry in dict:
                     version = dict[entry]["Version"]
                     github_link = dict[entry]["Github Link"]
@@ -321,7 +328,6 @@ class wx_python_gui:
                     )
                     self.dialog.SetYesNoCancelLabels("View on Github", "Always Ignore", "Ignore Once")
                     response = self.dialog.ShowModal()
-                    did_find_update = True
                     if response == wx.ID_YES:
                         webbrowser.open(github_link)
                     elif response == wx.ID_NO:
@@ -355,15 +361,14 @@ class wx_python_gui:
 
             timer_val = 5
             extension = ""
-            if event:
-                if event.GetEventObject() != wx.Menu:
-                    try:
-                        if event.GetEventObject().GetLabel() in ["Start Root Patching", "Reinstall Root Patches"]:
-                            extension = " --gui_patch"
-                        elif event.GetEventObject().GetLabel() == "Revert Root Patches":
-                            extension = " --gui_unpatch"
-                    except TypeError:
-                        pass
+            if event and event.GetEventObject() != wx.Menu:
+                try:
+                    if event.GetEventObject().GetLabel() in ["Start Root Patching", "Reinstall Root Patches"]:
+                        extension = " --gui_patch"
+                    elif event.GetEventObject().GetLabel() == "Revert Root Patches":
+                        extension = " --gui_unpatch"
+                except TypeError:
+                    pass
 
             if self.constants.launcher_script is None:
                 args_string = f"'{self.constants.launcher_binary}'{extension}"
@@ -760,9 +765,9 @@ class wx_python_gui:
         # Throw popup asking to install OpenCore
         self.dialog = wx.MessageDialog(
             parent=self.frame_modal,
-            message=f"Would you like to install OpenCore now?",
+            message="Would you like to install OpenCore now?",
             caption="Finished building your OpenCore configuration!",
-            style=wx.YES_NO | wx.ICON_QUESTION
+            style=wx.YES_NO | wx.ICON_QUESTION,
         )
         self.dialog.SetYesNoLabels("Install to disk", "View build log")
         if self.dialog.ShowModal() == wx.ID_YES:

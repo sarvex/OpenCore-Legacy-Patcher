@@ -100,7 +100,7 @@ class InitializeLoggingSupport:
 
         result = subprocess.run(["chmod", "777", self.log_filepath], capture_output=True)
         if result.returncode != 0:
-            print(f"- Failed to fix log file permissions")
+            print("- Failed to fix log file permissions")
             if result.stderr:
                 print(result.stderr.decode("utf-8"))
 
@@ -121,8 +121,10 @@ class InitializeLoggingSupport:
             level=logging.NOTSET,
             format="%(asctime)s - %(filename)s (%(lineno)d): %(message)s",
             handlers=[
-                logging.StreamHandler(stream = sys.stdout),
-                logging.FileHandler(self.log_filepath) if log_to_file is True else logging.NullHandler()
+                logging.StreamHandler(stream=sys.stdout),
+                logging.FileHandler(self.log_filepath)
+                if log_to_file
+                else logging.NullHandler(),
             ],
         )
         logging.getLogger().setLevel(logging.INFO)

@@ -54,19 +54,45 @@ class AutomaticSysPatch:
                     return
 
                 logging.info("- Determined patching is possible, checking for OCLP updates")
-                patch_string = ""
-                for patch in patches:
-                    if patches[patch] is True and not patch.startswith("Settings") and not patch.startswith("Validation"):
-                        patch_string += f"- {patch}\n"
-                # Check for updates
-                dict = updates.CheckBinaryUpdates(self.constants).check_binary_updates()
-                if not dict:
-                    logging.info("- No new binaries found on Github, proceeding with patching")
-                    if self.constants.launcher_script is None:
-                        args_string = f"'{self.constants.launcher_binary}' --gui_patch"
-                    else:
-                        args_string = f"{self.constants.launcher_binary} {self.constants.launcher_script} --gui_patch"
+                patch_string = "".join(
+                    f"- {patch}\n"
+                    for patch in patches
+                    if patches[patch] is True
+                    and not patch.startswith("Settings")
+                    and not patch.startswith("Validation")
+                )
+                if dict := updates.CheckBinaryUpdates(
+                    self.constants
+                ).check_binary_updates():
+                    for key in dict:
+                        version = dict[key]["Version"]
+                        github_link = dict[key]["Github Link"]
+                    logging.info(f"- Found new version: {version}")
 
+                    # launch osascript to ask user if they want to apply the update
+                    # if yes, open the link in the default browser
+                    # we never want to run the root patcher if there are updates available
+                    args = [
+                        "osascript",
+                        "-e",
+                        f"""display dialog "OpenCore Legacy Patcher has detected you're running without Root Patches, and would like to install them.\n\nHowever we've detected a new version of OCLP on Github. Would you like to view this?\n\nCurrent Version: {self.constants.patcher_version}\nLatest Version: {version}\n\nNote: After downloading the latest OCLP version, open the app and run the 'Post Install Root Patcher' from the main menu." """
+                        f'with icon POSIX file "{self.constants.app_icon_path}"',
+                    ]
+                    output = subprocess.run(
+                        args,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT
+                    )
+                    if output.returncode == 0:
+                        webbrowser.open(github_link)
+
+                else:
+                    logging.info("- No new binaries found on Github, proceeding with patching")
+                    args_string = (
+                        f"'{self.constants.launcher_binary}' --gui_patch"
+                        if self.constants.launcher_script is None
+                        else f"{self.constants.launcher_binary} {self.constants.launcher_script} --gui_patch"
+                    )
                     warning_str = ""
                     if network_handler.NetworkUtilities("https://api.github.com/repos/dortania/OpenCore-Legacy-Patcher/releases/latest").verify_network_connection() is False:
                         warning_str = f"""\n\nWARNING: We're unable to verify whether there are any new releases of OpenCore Legacy Patcher on Github. Be aware that you may be using an outdated version for this OS. If you're unsure, verify on Github that OpenCore Legacy Patcher {self.constants.patcher_version} is the latest official release"""
@@ -96,31 +122,7 @@ class AutomaticSysPatch:
                             stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT
                         )
-                    return
-                else:
-                    for key in dict:
-                        version = dict[key]["Version"]
-                        github_link = dict[key]["Github Link"]
-                    logging.info(f"- Found new version: {version}")
-
-                    # launch osascript to ask user if they want to apply the update
-                    # if yes, open the link in the default browser
-                    # we never want to run the root patcher if there are updates available
-                    args = [
-                        "osascript",
-                        "-e",
-                        f"""display dialog "OpenCore Legacy Patcher has detected you're running without Root Patches, and would like to install them.\n\nHowever we've detected a new version of OCLP on Github. Would you like to view this?\n\nCurrent Version: {self.constants.patcher_version}\nLatest Version: {version}\n\nNote: After downloading the latest OCLP version, open the app and run the 'Post Install Root Patcher' from the main menu." """
-                        f'with icon POSIX file "{self.constants.app_icon_path}"',
-                    ]
-                    output = subprocess.run(
-                        args,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT
-                    )
-                    if output.returncode == 0:
-                        webbrowser.open(github_link)
-
-                    return
+                return
             else:
                 logging.info("- No patches detected")
         else:

@@ -47,16 +47,13 @@ class Analytics:
         except:
             return "US"
 
-        if "Country" not in result:
-            return "US"
-
-        return result["Country"]
+        return "US" if "Country" not in result else result["Country"]
 
 
     def _generate_base_data(self) -> None:
 
         self.unique_identity = str(self.constants.computer.uuid_sha1)
-        self.application = str("OpenCore Legacy Patcher")
+        self.application = "OpenCore Legacy Patcher"
         self.version = str(self.constants.patcher_version)
         self.os = str( self.constants.detected_os_version)
         self.model = str(self.constants.computer.real_model)
@@ -65,20 +62,18 @@ class Analytics:
         self.firmware = str(self.constants.computer.firmware_vendor)
         self.location = str(self._get_country())
 
-        for gpu in self.constants.computer.gpus:
-            self.gpus.append(str(gpu.arch))
-
+        self.gpus.extend(str(gpu.arch) for gpu in self.constants.computer.gpus)
         self.data = {
-            'KEY':                 SITE_KEY,
-            'UNIQUE_IDENTITY':     self.unique_identity,
-            'APPLICATION_NAME':    self.application,
+            'KEY': SITE_KEY,
+            'UNIQUE_IDENTITY': self.unique_identity,
+            'APPLICATION_NAME': self.application,
             'APPLICATION_VERSION': self.version,
-            'OS_VERSION':          self.os,
-            'MODEL':               self.model,
-            'GPUS':                self.gpus,
-            'FIRMWARE':            self.firmware,
-            'LOCATION':            self.location,
-            'TIMESTAMP':           str(datetime.datetime.now().strftime(DATE_FORMAT)),
+            'OS_VERSION': self.os,
+            'MODEL': self.model,
+            'GPUS': self.gpus,
+            'FIRMWARE': self.firmware,
+            'LOCATION': self.location,
+            'TIMESTAMP': datetime.datetime.now().strftime(DATE_FORMAT),
         }
 
         # convert to JSON:

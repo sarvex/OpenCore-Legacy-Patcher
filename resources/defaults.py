@@ -36,7 +36,7 @@ class GenerateDefaults:
         self.constants.custom_serial_number:       str = ""
         self.constants.custom_board_serial_number: str = ""
 
-        if self.host_is_target is True:
+        if self.host_is_target:
             for gpu in self.constants.computer.gpus:
                 if gpu.device_id_unspoofed == -1:
                     gpu.device_id_unspoofed = gpu.device_id
@@ -56,11 +56,7 @@ class GenerateDefaults:
         General probe for data
         """
 
-        if "Book" in self.model:
-            self.constants.set_content_caching = False
-        else:
-            self.constants.set_content_caching = True
-
+        self.constants.set_content_caching = "Book" not in self.model
         if self.model in ["MacBookPro8,2", "MacBookPro8,3"]:
             # Users disabling TS2 most likely have a faulty dGPU
             # users can override this in settings
@@ -72,16 +68,10 @@ class GenerateDefaults:
                 self.constants.allow_ts2_accel = False
 
         if self.model in smbios_data.smbios_dictionary:
-            if smbios_data.smbios_dictionary[self.model]["CPU Generation"] >= cpu_data.cpu_data.skylake.value:
-                # On 2016-2017 MacBook Pros, 15" devices used a stock Samsung SSD with IONVMeController
-                # Technically this should be patched based on NVMeFix.kext logic,
-                # however Apple deemed the SSD unsupported for enhanced performance
-                # In addition, some upgraded NVMe drives still have issues with enhanced power management
-                # Safest to disable by default, allow user to configure afterwards
-                self.constants.allow_nvme_fixing = False
-            else:
-                self.constants.allow_nvme_fixing = True
-
+            self.constants.allow_nvme_fixing = (
+                smbios_data.smbios_dictionary[self.model]["CPU Generation"]
+                < cpu_data.cpu_data.skylake.value
+            )
         # Check if running in RecoveryOS
         self.constants.recovery_status = utilities.check_recovery()
 
@@ -98,12 +88,11 @@ class GenerateDefaults:
         SMBIOS specific probe
         """
 
-        if not self.host_is_target:
-            if self.model in ["MacPro4,1", "MacPro5,1"]:
-                # Allow H.265 on AMD
-                # Assume 2009+ machines have Polaris on pre-builts (internal testing)
-                # Hardware Detection will never hit this
-                self.constants.serial_settings = "Minimal"
+        if not self.host_is_target and self.model in ["MacPro4,1", "MacPro5,1"]:
+            # Allow H.265 on AMD
+            # Assume 2009+ machines have Polaris on pre-builts (internal testing)
+            # Hardware Detection will never hit this
+            self.constants.serial_settings = "Minimal"
 
         # Check if model uses T2 SMBIOS, if so see if it needs root patching (determined earlier on via SIP variable)
         # If not, allow SecureBootModel usage, otherwise force VMM patching
@@ -116,16 +105,19 @@ class GenerateDefaults:
             spoof_model = self.model
 
 
-        if spoof_model in smbios_data.smbios_dictionary:
-            if smbios_data.smbios_dictionary[spoof_model]["SecureBootModel"] is not None:
-                if self.constants.sip_status is False:
-                    # Force VMM as root patching breaks .im4m signature
-                    self.constants.secure_status = False
-                    self.constants.force_vmm = True
-                else:
-                    # Allow SecureBootModel
-                    self.constants.secure_status = True
-                    self.constants.force_vmm = False
+        if (
+            spoof_model in smbios_data.smbios_dictionary
+            and smbios_data.smbios_dictionary[spoof_model]["SecureBootModel"]
+            is not None
+        ):
+            if self.constants.sip_status is False:
+                # Force VMM as root patching breaks .im4m signature
+                self.constants.secure_status = False
+                self.constants.force_vmm = True
+            else:
+                # Allow SecureBootModel
+                self.constants.secure_status = True
+                self.constants.force_vmm = False
 
 
     def _nvram_probe(self) -> None:
@@ -168,7 +160,7 @@ class GenerateDefaults:
                 return
 
         else:
-            if not self.model in smbios_data.smbios_dictionary:
+            if self.model not in smbios_data.smbios_dictionary:
                 return
             if (
                 smbios_data.smbios_dictionary[self.model]["Wireless Model"] not in [
@@ -193,16 +185,19 @@ class GenerateDefaults:
         """
         Misc probe
         """
-        if self.host_is_target:
-            if self.constants.computer.usb_controllers:
-                if self.model in smbios_data.smbios_dictionary:
-                    if smbios_data.smbios_dictionary[self.model]["CPU Generation"] < cpu_data.cpu_data.ivy_bridge.value:
-                        # Pre-Ivy do not natively support XHCI boot support
-                        # If we detect XHCI on older model, enable
-                        for controller in self.constants.computer.usb_controllers:
-                            if isinstance(controller, device_probe.XHCIController):
-                                self.constants.xhci_boot = True
-                                break
+        if (
+            self.host_is_target
+            and self.constants.computer.usb_controllers
+            and self.model in smbios_data.smbios_dictionary
+            and smbios_data.smbios_dictionary[self.model]["CPU Generation"]
+            < cpu_data.cpu_data.ivy_bridge.value
+        ):
+            # Pre-Ivy do not natively support XHCI boot support
+            # If we detect XHCI on older model, enable
+            for controller in self.constants.computer.usb_controllers:
+                if isinstance(controller, device_probe.XHCIController):
+                    self.constants.xhci_boot = True
+                    break
 
 
     def _gpu_probe(self) -> None:
@@ -213,16 +208,15 @@ class GenerateDefaults:
         gpu_dict = []
         if self.host_is_target:
             gpu_dict = self.constants.computer.gpus
-        else:
-            if self.model in smbios_data.smbios_dictionary:
-                gpu_dict = smbios_data.smbios_dictionary[self.model]["Stock GPUs"]
+        elif self.model in smbios_data.smbios_dictionary:
+            gpu_dict = smbios_data.smbios_dictionary[self.model]["Stock GPUs"]
 
         for gpu in gpu_dict:
             if self.host_is_target:
-                if gpu.class_code:
-                    if gpu.class_code == 0xFFFFFFFF:
-                        continue
-                gpu = gpu.arch
+                if gpu.class_code and gpu.class_code == 0xFFFFFFFF:
+                    continue
+                else:
+                    gpu = gpu.arch
 
             # Legacy Metal Logic
             if gpu in [
@@ -255,18 +249,21 @@ class GenerateDefaults:
                         device_probe.AMD.Archs.Vega,
                         device_probe.AMD.Archs.Navi,
                 ]:
-                    if gpu == device_probe.AMD.Archs.Legacy_GCN_7000:
-                        # Check if we're running in Rosetta
-                        if self.host_is_target:
-                            if self.constants.computer.rosetta_active is True:
-                                continue
+                    if (
+                        gpu == device_probe.AMD.Archs.Legacy_GCN_7000
+                        and self.host_is_target
+                        and self.constants.computer.rosetta_active is True
+                    ):
+                        continue
 
                     # Allow H.265 on AMD
-                    if self.model in smbios_data.smbios_dictionary:
-                        if "Socketed GPUs" in smbios_data.smbios_dictionary[self.model]:
-                            self.constants.serial_settings = "Minimal"
+                    if (
+                        self.model in smbios_data.smbios_dictionary
+                        and "Socketed GPUs"
+                        in smbios_data.smbios_dictionary[self.model]
+                    ):
+                        self.constants.serial_settings = "Minimal"
 
-                # See if system can use the native AMD stack in Ventura
                 if gpu in [
                     device_probe.AMD.Archs.Polaris,
                     device_probe.AMD.Archs.Polaris_Spoof,
@@ -276,16 +273,19 @@ class GenerateDefaults:
                     if self.host_is_target:
                         if "AVX2" in self.constants.computer.cpu.leafs:
                             continue
-                    else:
-                        if self.model in smbios_data.smbios_dictionary:
-                            if smbios_data.smbios_dictionary[self.model]["CPU Generation"] >= cpu_data.cpu_data.haswell.value:
-                                continue
+                    elif (
+                        self.model in smbios_data.smbios_dictionary
+                        and smbios_data.smbios_dictionary[self.model][
+                            "CPU Generation"
+                        ]
+                        >= cpu_data.cpu_data.haswell.value
+                    ):
+                        continue
 
                 self.constants.sip_status = False
                 self.constants.secure_status = False
                 self.constants.disable_cs_lv = True
 
-            # Non-Metal Logic
             elif gpu in [
                 device_probe.Intel.Archs.Iron_Lake,
                 device_probe.Intel.Archs.Sandy_Bridge,

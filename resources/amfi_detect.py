@@ -104,21 +104,18 @@ class AmfiConfigurationDetection:
         for arg in self.boot_args:
             if arg.startswith("amfi_unrestrict_task_for_pid"):
                 value = arg.split("=")
-                if len(value) == 2:
-                    if value[1] in ["0x1", "1"]:
-                        self.AMFI_ALLOW_TASK_FOR_PID = True
+                if len(value) == 2 and value[1] in ["0x1", "1"]:
+                    self.AMFI_ALLOW_TASK_FOR_PID = True
             elif arg.startswith("amfi_allow_any_signature"):
                 value = arg.split("=")
-                if len(value) == 2:
-                    if value[1] in ["0x1", "1"]:
-                        self.AMFI_ALLOW_INVALID_SIGNATURE = True
+                if len(value) == 2 and value[1] in ["0x1", "1"]:
+                    self.AMFI_ALLOW_INVALID_SIGNATURE = True
             elif arg.startswith("amfi_get_out_of_my_way"):
                 value = arg.split("=")
-                if len(value) == 2:
-                    if value[1] in ["0x1", "1"]:
-                        self.AMFI_ALLOW_EVERYTHING = True
-                        self.SKIP_LIBRARY_VALIDATION = True
-                        self.AMFI_ALLOW_INVALID_SIGNATURE = True
+                if len(value) == 2 and value[1] in ["0x1", "1"]:
+                    self.AMFI_ALLOW_EVERYTHING = True
+                    self.SKIP_LIBRARY_VALIDATION = True
+                    self.AMFI_ALLOW_INVALID_SIGNATURE = True
 
 
     def _parse_oclp_configuration(self) -> None:

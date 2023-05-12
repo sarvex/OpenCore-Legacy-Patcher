@@ -72,9 +72,9 @@ class BuildMiscellaneous:
             support.BuildSupport(self.model, self.constants, self.config).enable_kext("RestrictEvents.kext", self.constants.restrictevents_version, self.constants.restrictevents_path)
             self.config["NVRAM"]["Add"]["4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102"]["revblock"] = block_args
 
-        if block_args != "" and patch_args == "":
-            # Disable unneeded Userspace patching (cs_validate_page is quite expensive)
-            patch_args = "none"
+            if not patch_args:
+                # Disable unneeded Userspace patching (cs_validate_page is quite expensive)
+                patch_args = "none"
 
         if patch_args != "":
             logging.info(f"- Setting RestrictEvents patch arguments: {patch_args}")
@@ -193,15 +193,23 @@ class BuildMiscellaneous:
         """
 
         # Pre-Force Touch trackpad support for macOS Ventura
-        if smbios_data.smbios_dictionary[self.model]["CPU Generation"] < cpu_data.cpu_data.skylake.value:
-            if self.model.startswith("MacBook"):
-                # These units got force touch early, so ignore them
-                if self.model not in ["MacBookPro11,4", "MacBookPro11,5", "MacBookPro12,1", "MacBook8,1"]:
-                    support.BuildSupport(self.model, self.constants, self.config).enable_kext("AppleUSBTopCase.kext", self.constants.topcase_version, self.constants.top_case_path)
-                    support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("AppleUSBTopCase.kext/Contents/PlugIns/AppleUSBTCButtons.kext")["Enabled"] = True
-                    support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("AppleUSBTopCase.kext/Contents/PlugIns/AppleUSBTCKeyboard.kext")["Enabled"] = True
-                    support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("AppleUSBTopCase.kext/Contents/PlugIns/AppleUSBTCKeyEventDriver.kext")["Enabled"] = True
-                    support.BuildSupport(self.model, self.constants, self.config).enable_kext("AppleUSBMultitouch.kext", self.constants.multitouch_version, self.constants.multitouch_path)
+        if (
+            smbios_data.smbios_dictionary[self.model]["CPU Generation"]
+            < cpu_data.cpu_data.skylake.value
+            and self.model.startswith("MacBook")
+            and self.model
+            not in [
+                "MacBookPro11,4",
+                "MacBookPro11,5",
+                "MacBookPro12,1",
+                "MacBook8,1",
+            ]
+        ):
+            support.BuildSupport(self.model, self.constants, self.config).enable_kext("AppleUSBTopCase.kext", self.constants.topcase_version, self.constants.top_case_path)
+            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("AppleUSBTopCase.kext/Contents/PlugIns/AppleUSBTCButtons.kext")["Enabled"] = True
+            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("AppleUSBTopCase.kext/Contents/PlugIns/AppleUSBTCKeyboard.kext")["Enabled"] = True
+            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("AppleUSBTopCase.kext/Contents/PlugIns/AppleUSBTCKeyEventDriver.kext")["Enabled"] = True
+            support.BuildSupport(self.model, self.constants, self.config).enable_kext("AppleUSBMultitouch.kext", self.constants.multitouch_version, self.constants.multitouch_path)
         # Legacy Trackpad support
         if self.model in ["MacBook4,1", "MacBook5,2"]:
             support.BuildSupport(self.model, self.constants, self.config).enable_kext("AppleUSBTrackpad.kext", self.constants.apple_trackpad, self.constants.apple_trackpad_path)
@@ -229,9 +237,11 @@ class BuildMiscellaneous:
         iSight Handler
         """
 
-        if "Legacy iSight" in smbios_data.smbios_dictionary[self.model]:
-            if smbios_data.smbios_dictionary[self.model]["Legacy iSight"] is True:
-                support.BuildSupport(self.model, self.constants, self.config).enable_kext("LegacyUSBVideoSupport.kext", self.constants.apple_isight_version, self.constants.apple_isight_path)
+        if (
+            "Legacy iSight" in smbios_data.smbios_dictionary[self.model]
+            and smbios_data.smbios_dictionary[self.model]["Legacy iSight"] is True
+        ):
+            support.BuildSupport(self.model, self.constants, self.config).enable_kext("LegacyUSBVideoSupport.kext", self.constants.apple_isight_version, self.constants.apple_isight_path)
 
 
     def _usb_handling(self) -> None:

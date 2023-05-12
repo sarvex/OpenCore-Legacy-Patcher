@@ -57,9 +57,11 @@ class OpenCoreLegacyPatcher:
         self.constants.computer = device_probe.Computer.probe()
         self.computer = self.constants.computer
         self.constants.booted_oc_disk = utilities.find_disk_off_uuid(utilities.clean_device_path(self.computer.opencore_path))
-        if self.constants.computer.firmware_vendor:
-            if self.constants.computer.firmware_vendor != "Apple":
-                self.constants.host_is_hackintosh = True
+        if (
+            self.constants.computer.firmware_vendor
+            and self.constants.computer.firmware_vendor != "Apple"
+        ):
+            self.constants.host_is_hackintosh = True
 
         # Generate environment data
         self.constants.recovery_status = utilities.check_recovery()
@@ -100,7 +102,7 @@ class OpenCoreLegacyPatcher:
         self.constants.gui_mode = True  # Assumes no user interaction is required
 
         ignore_args = ["--auto_patch", "--gui_patch", "--gui_unpatch"]
-        if not any(x in sys.argv for x in ignore_args):
+        if all(x not in sys.argv for x in ignore_args):
             self.constants.current_path = Path.cwd()
             self.constants.cli_mode = True
             if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
@@ -108,7 +110,7 @@ class OpenCoreLegacyPatcher:
                 self.constants.payload_path = sys._MEIPASS / Path("payloads")
         ignore_args = ignore_args.pop(0)
 
-        if not any(x in sys.argv for x in ignore_args):
+        if all(x not in sys.argv for x in ignore_args):
             while self.constants.unpack_thread.is_alive():
                 time.sleep(0.1)
 

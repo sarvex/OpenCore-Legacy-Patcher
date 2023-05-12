@@ -28,35 +28,34 @@ class os_data(enum.IntEnum):
 
 class os_conversion:
 
-    def os_to_kernel(os):
+    def os_to_kernel(self):
         # Convert OS version to major XNU version
-        if os.startswith("10."):
-            return (int(os.split(".")[1]) + 4)
+        if self.startswith("10."):
+            return int(self.split(".")[1]) + 4
         else:
-            return (int(os.split(".")[0]) + 9)
+            return int(self.split(".")[0]) + 9
 
-    def kernel_to_os(kernel):
+    def kernel_to_os(self):
         # Convert major XNU version to OS version
-        if kernel >= os_data.big_sur:
-            return str((kernel - 9))
-        else:
-            return str((f"10.{kernel - 4}"))
+        return str(self - 9) if self >= os_data.big_sur else str(f"10.{self - 4}")
 
-    def is_os_newer(source_major, source_minor, target_major, target_minor):
+    def is_os_newer(self, source_minor, target_major, target_minor):
         # Check if OS version 1 is newer than OS version 2
-        if source_major < target_major:
+        if (
+            self >= target_major
+            and self == target_major
+            and source_minor < target_minor
+            or self < target_major
+        ):
             return True
-        elif source_major == target_major:
-            if source_minor < target_minor:
-                return True
-            else:
-                return False
+        elif self == target_major:
+            return False
 
-    def convert_kernel_to_marketing_name(kernel):
+    def convert_kernel_to_marketing_name(self):
         # Convert major XNU version to Marketing Name
         try:
             # Find os_data enum name
-            os_name = os_data(kernel).name
+            os_name = os_data(self).name
 
             # Remove "_" from the string
             os_name = os_name.replace("_", " ")
@@ -66,22 +65,22 @@ class os_conversion:
         except ValueError:
             # Handle cases where no enum value exists
             # Pass kernel_to_os() as a substitute for a proper OS name
-            os_name = os_conversion.kernel_to_os(kernel)
+            os_name = os_conversion.kernel_to_os(self)
 
         return os_name
 
-    def convert_marketing_name_to_kernel(marketing_name):
+    def convert_marketing_name_to_kernel(self):
         # Convert Marketing Name to major XNU version
         try:
             # Find os_data enum value
-            os_kernel = os_data[marketing_name.lower().replace(" ", "_")]
+            os_kernel = os_data[self.lower().replace(" ", "_")]
         except KeyError:
             os_kernel = 0
 
-        return int(os_kernel)
+        return os_kernel
 
 
-    def find_largest_build(build_array):
+    def find_largest_build(self):
         # Find the newest version within an array of versions
         # These builds will have both numbers and letters in the version
         # ex:
@@ -94,11 +93,8 @@ class os_conversion:
 
         max_length =        0  # Length of the longest build
         build_array_split = [] # 'build_array', converted into individual array of elements
-        final_build =       "" # Largest determined build
-
-
         # Convert strings to arrays
-        for build in build_array:
+        for build in self:
             list_build = list(build)
             if len(list_build) > max_length:
                 max_length = len(list_build)
@@ -125,17 +121,12 @@ class os_conversion:
                     if int(build_outer_loop[i]) < int(build_inner_loop[i]):
                         break
 
-        # Convert array back to string
-        for entry in build_array_split[0]:
-            # Since we split per character, we know that anything above 9 is a letter
-            if int(entry) > 9:
-                # revert back to letter
-                final_build += chr(entry)
-            else:
-                final_build += str(entry)
-
+        final_build = "".join(
+            chr(entry) if int(entry) > 9 else str(entry)
+            for entry in build_array_split[0]
+        )
         # Since we pad with 0s, we need to next determine how many 0s to remove
-        for build in build_array:
+        for build in self:
             if final_build.startswith(build):
                 # Handle cases where Apple added a letter to the build
                 # ex. "22A5295" vs "22A5295"

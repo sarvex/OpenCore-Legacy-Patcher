@@ -80,9 +80,11 @@ class BuildSMBIOS:
         logging.info(f"- Using Model ID: {spoofed_model}")
 
         spoofed_board = ""
-        if spoofed_model in smbios_data.smbios_dictionary:
-            if "Board ID" in smbios_data.smbios_dictionary[spoofed_model]:
-                spoofed_board = smbios_data.smbios_dictionary[spoofed_model]["Board ID"]
+        if (
+            spoofed_model in smbios_data.smbios_dictionary
+            and "Board ID" in smbios_data.smbios_dictionary[spoofed_model]
+        ):
+            spoofed_board = smbios_data.smbios_dictionary[spoofed_model]["Board ID"]
         logging.info(f"- Using Board ID: {spoofed_board}")
 
         self.spoofed_model = spoofed_model

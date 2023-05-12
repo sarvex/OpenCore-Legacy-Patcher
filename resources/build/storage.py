@@ -59,20 +59,23 @@ class BuildStorage:
         # ThirdPartyDrives Check
         if self.constants.allow_3rd_party_drives is True:
             for drive in ["SATA 2.5", "SATA 3.5", "mSATA"]:
-                if not self.model in smbios_data.smbios_dictionary:
+                if self.model not in smbios_data.smbios_dictionary:
                     break
-                if not "Stock Storage" in smbios_data.smbios_dictionary[self.model]:
+                if (
+                    "Stock Storage"
+                    not in smbios_data.smbios_dictionary[self.model]
+                ):
                     break
-                if drive in smbios_data.smbios_dictionary[self.model]["Stock Storage"]:
-                    if not self.constants.custom_model:
-                        if self.computer.third_party_sata_ssd is True:
-                            logging.info("- Adding SATA Hibernation Patch")
-                            self.config["Kernel"]["Quirks"]["ThirdPartyDrives"] = True
-                            break
-                    else:
-                        logging.info("- Adding SATA Hibernation Patch")
-                        self.config["Kernel"]["Quirks"]["ThirdPartyDrives"] = True
-                        break
+                if drive in smbios_data.smbios_dictionary[self.model][
+                    "Stock Storage"
+                ] and (
+                    not self.constants.custom_model
+                    and self.computer.third_party_sata_ssd is True
+                    or self.constants.custom_model
+                ):
+                    logging.info("- Adding SATA Hibernation Patch")
+                    self.config["Kernel"]["Quirks"]["ThirdPartyDrives"] = True
+                    break
 
 
     def _pata_handling(self) -> None:
@@ -80,11 +83,14 @@ class BuildStorage:
         ATA (PATA) Handler
         """
 
-        if not self.model in smbios_data.smbios_dictionary:
+        if self.model not in smbios_data.smbios_dictionary:
             return
-        if not "Stock Storage" in smbios_data.smbios_dictionary[self.model]:
+        if "Stock Storage" not in smbios_data.smbios_dictionary[self.model]:
             return
-        if not "PATA" in smbios_data.smbios_dictionary[self.model]["Stock Storage"]:
+        if (
+            "PATA"
+            not in smbios_data.smbios_dictionary[self.model]["Stock Storage"]
+        ):
             return
 
         support.BuildSupport(self.model, self.constants, self.config).enable_kext("AppleIntelPIIXATA.kext", self.constants.piixata_version, self.constants.piixata_path)
@@ -119,10 +125,9 @@ class BuildStorage:
                     logging.info(f"- Found NVMe ({i}) at {controller.pci_path}")
                     self.config["DeviceProperties"]["Add"].setdefault(controller.pci_path, {})["pci-aspm-default"] = nvme_aspm
                     self.config["DeviceProperties"]["Add"][controller.pci_path.rpartition("/")[0]] = {"pci-aspm-default": nvme_aspm}
-                else:
-                    if "-nvmefaspm" not in self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"]:
-                        logging.info("- Falling back to -nvmefaspm")
-                        self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " -nvmefaspm"
+                elif "-nvmefaspm" not in self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"]:
+                    logging.info("- Falling back to -nvmefaspm")
+                    self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " -nvmefaspm"
 
                 if (controller.vendor_id != 0x144D and controller.device_id != 0xA804):
                     # Avoid injecting NVMeFix when a native Apple NVMe drive is present
@@ -148,16 +153,26 @@ class BuildStorage:
         SDXC Handler
         """
 
-        if not self.model in smbios_data.smbios_dictionary:
+        if self.model not in smbios_data.smbios_dictionary:
             return
-        if not "CPU Generation" in smbios_data.smbios_dictionary[self.model]:
+        if "CPU Generation" not in smbios_data.smbios_dictionary[self.model]:
             return
 
         # With macOS Monterey, Apple's SDXC driver requires the system to support VT-D
         # However pre-Ivy Bridge don't support this feature
-        if smbios_data.smbios_dictionary[self.model]["CPU Generation"] <= cpu_data.cpu_data.sandy_bridge.value:
-            if (self.constants.computer.sdxc_controller and not self.constants.custom_model) or (self.model.startswith("MacBookPro8") or self.model.startswith("Macmini5")):
-                support.BuildSupport(self.model, self.constants, self.config).enable_kext("BigSurSDXC.kext", self.constants.bigsursdxc_version, self.constants.bigsursdxc_path)
+        if (
+            smbios_data.smbios_dictionary[self.model]["CPU Generation"]
+            <= cpu_data.cpu_data.sandy_bridge.value
+            and (
+                self.constants.computer.sdxc_controller
+                and not self.constants.custom_model
+            )
+            or (
+                self.model.startswith("MacBookPro8")
+                or self.model.startswith("Macmini5")
+            )
+        ):
+            support.BuildSupport(self.model, self.constants, self.config).enable_kext("BigSurSDXC.kext", self.constants.bigsursdxc_version, self.constants.bigsursdxc_path)
 
 
     def _trim_handling(self) -> None:
@@ -166,5 +181,5 @@ class BuildStorage:
         """
 
         if self.constants.apfs_trim_timeout is False:
-            logging.info(f"- Disabling APFS TRIM timeout")
+            logging.info("- Disabling APFS TRIM timeout")
             self.config["Kernel"]["Quirks"]["SetApfsTrimTimeout"] = 0

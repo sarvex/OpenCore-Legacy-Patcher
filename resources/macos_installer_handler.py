@@ -126,9 +126,8 @@ class InstallerCreation():
             if "DTPlatformVersion" in plist:
                 platform_version = plist["DTPlatformVersion"]
                 platform_version = platform_version.split(".")[0]
-                if platform_version[0] == "10":
-                    if int(platform_version[1]) < 13:
-                        additional_args = f" --applicationpath '{installer_path}'"
+                if platform_version[0] == "10" and int(platform_version[1]) < 13:
+                    additional_args = f" --applicationpath '{installer_path}'"
 
         if script_location.exists():
             script_location.unlink()
@@ -141,9 +140,7 @@ if $erase_disk; then
     "{createinstallmedia_path}" --volume /Volumes/OCLP-Installer --nointeraction{additional_args}
 fi
             ''')
-        if Path(script_location).exists():
-            return True
-        return False
+        return bool(Path(script_location).exists())
 
 
     def list_disk_to_format(self) -> dict:
@@ -182,21 +179,23 @@ fi
         for disk in all_disks:
             # Strip disks that are under 14GB (15,032,385,536 bytes)
             # createinstallmedia isn't great at detecting if a disk has enough space
-            if not any(all_disks[disk]['size'] > 15032385536 for partition in all_disks[disk]):
+            if all(
+                all_disks[disk]['size'] <= 15032385536 for _ in all_disks[disk]
+            ):
                 continue
             # Strip internal disks as well (avoid user formatting their SSD/HDD)
             # Ensure user doesn't format their boot drive
-            if not any(all_disks[disk]['removable'] is False for partition in all_disks[disk]):
+            if all(
+                all_disks[disk]['removable'] is not False for _ in all_disks[disk]
+            ):
                 continue
 
             logging.info(f"disk {disk}: {all_disks[disk]['name']} ({utilities.human_fmt(all_disks[disk]['size'])})")
-            list_disks.update({
-                disk: {
-                    "identifier": all_disks[disk]["identifier"],
-                    "name": all_disks[disk]["name"],
-                    "size": all_disks[disk]["size"],
-                }
-            })
+            list_disks[disk] = {
+                "identifier": all_disks[disk]["identifier"],
+                "name": all_disks[disk]["name"],
+                "size": all_disks[disk]["size"],
+            }
 
         return list_disks
 
@@ -245,15 +244,13 @@ class RemoteInstallerCatalog:
         url: str = ""
 
         if seed_type == SeedType.DeveloperSeed:
-            url = f"{CATALOG_URL_BASE}-{CATALOG_URL_VERSION}seed-{CATALOG_URL_EXTENSION}"
+            return f"{CATALOG_URL_BASE}-{CATALOG_URL_VERSION}seed-{CATALOG_URL_EXTENSION}"
         elif seed_type == SeedType.PublicSeed:
-            url = f"{CATALOG_URL_BASE}-{CATALOG_URL_VERSION}beta-{CATALOG_URL_EXTENSION}"
+            return f"{CATALOG_URL_BASE}-{CATALOG_URL_VERSION}beta-{CATALOG_URL_EXTENSION}"
         elif seed_type == SeedType.CustomerSeed:
-            url = f"{CATALOG_URL_BASE}-{CATALOG_URL_VERSION}customerseed-{CATALOG_URL_EXTENSION}"
+            return f"{CATALOG_URL_BASE}-{CATALOG_URL_VERSION}customerseed-{CATALOG_URL_EXTENSION}"
         else:
-            url = f"{CATALOG_URL_BASE}-{CATALOG_URL_EXTENSION}"
-
-        return url
+            return f"{CATALOG_URL_BASE}-{CATALOG_URL_EXTENSION}"
 
 
     def _fetch_catalog(self) -> dict:
@@ -367,20 +364,17 @@ class RemoteInstallerCatalog:
                 if any([version, build, download_link, size, integrity]) is None:
                     continue
 
-                available_apps.update({
-                    product: {
-                        "Version":   version,
-                        "Build":     build,
-                        "Link":      download_link,
-                        "Size":      size,
-                        "integrity": integrity,
-                        "Source":   "Apple Inc.",
-                        "Variant":   catalog_url,
-                    }
-                })
+                available_apps[product] = {
+                    "Version": version,
+                    "Build": build,
+                    "Link": download_link,
+                    "Size": size,
+                    "integrity": integrity,
+                    "Source": "Apple Inc.",
+                    "Variant": catalog_url,
+                }
 
-        available_apps = {k: v for k, v in sorted(available_apps.items(), key=lambda x: x[1]['Version'])}
-        return available_apps
+        return dict(sorted(available_apps.items(), key=lambda x: x[1]['Version']))
 
 
     def _list_newest_installers_only(self) -> dict:
@@ -407,20 +401,25 @@ class RemoteInstallerCatalog:
 
             # First determine the largest version
             for ia in newest_apps:
-                if newest_apps[ia]["Version"].startswith(version):
-                    if newest_apps[ia]["Variant"] not in ["CustomerSeed", "DeveloperSeed", "PublicSeed"]:
-                        remote_version = newest_apps[ia]["Version"].split(".")
-                        if remote_version[0] == "10":
-                            remote_version.pop(0)
-                            remote_version.pop(0)
-                        else:
-                            remote_version.pop(0)
-                        if int(remote_version[0]) > remote_version_minor:
-                            remote_version_minor = int(remote_version[0])
-                            remote_version_security = 0 # Reset as new minor version found
-                        if len(remote_version) > 1:
-                            if int(remote_version[1]) > remote_version_security:
-                                remote_version_security = int(remote_version[1])
+                if newest_apps[ia]["Version"].startswith(version) and newest_apps[
+                    ia
+                ]["Variant"] not in [
+                    "CustomerSeed",
+                    "DeveloperSeed",
+                    "PublicSeed",
+                ]:
+                    remote_version = newest_apps[ia]["Version"].split(".")
+                    if remote_version[0] == "10":
+                        remote_version.pop(0)
+                    remote_version.pop(0)
+                    if int(remote_version[0]) > remote_version_minor:
+                        remote_version_minor = int(remote_version[0])
+                        remote_version_security = 0 # Reset as new minor version found
+                    if (
+                        len(remote_version) > 1
+                        and int(remote_version[1]) > remote_version_security
+                    ):
+                        remote_version_security = int(remote_version[1])
 
             # Now remove all versions that are not the largest
             for ia in list(newest_apps):
@@ -432,22 +431,18 @@ class RemoteInstallerCatalog:
                     remote_version = newest_apps[ia]["Version"].split(".")
                     if remote_version[0] == "10":
                         remote_version.pop(0)
-                        remote_version.pop(0)
-                    else:
-                        remote_version.pop(0)
+                    remote_version.pop(0)
                     if int(remote_version[0]) < remote_version_minor:
                         newest_apps.pop(ia)
                         continue
-                    if int(remote_version[0]) == remote_version_minor:
-                        if len(remote_version) > 1:
-                            if int(remote_version[1]) < remote_version_security:
-                                newest_apps.pop(ia)
-                                continue
-                        else:
-                            if remote_version_security > 0:
-                                newest_apps.pop(ia)
-                                continue
-
+                    if int(remote_version[0]) == remote_version_minor and (
+                        len(remote_version) > 1
+                        and int(remote_version[1]) < remote_version_security
+                        or len(remote_version) <= 1
+                        and remote_version_security > 0
+                    ):
+                        newest_apps.pop(ia)
+                        continue
                     # Remove duplicate builds
                     #   ex.  macOS 12.5.1 has 2 builds in the Software Update Catalog
                     #   ref: https://twitter.com/classicii_mrmac/status/1560357471654379522
@@ -548,17 +543,17 @@ class LocalInstallerCatalog:
             if results[1] is not None:
                 app_version = results[1]
 
-            application_list.update({
-                application: {
-                    "Short Name": clean_name,
-                    "Version": app_version,
-                    "Build": app_sdk,
-                    "Path": application,
-                }
-            })
+            application_list[application] = {
+                "Short Name": clean_name,
+                "Version": app_version,
+                "Build": app_sdk,
+                "Path": application,
+            }
 
         # Sort Applications by version
-        application_list = {k: v for k, v in sorted(application_list.items(), key=lambda item: item[1]["Version"])}
+        application_list = dict(
+            sorted(application_list.items(), key=lambda item: item[1]["Version"])
+        )
         return application_list
 
 

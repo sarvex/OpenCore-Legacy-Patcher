@@ -49,10 +49,13 @@ class BuildBluetooth:
             # BCM94331 can include either BCM2070 or BRCM20702 v1 Bluetooth chipsets
             # Note Monterey only natively supports BRCM20702 v2 (found with BCM94360)
             # Due to this, BlueToolFixup is required to resolve Firmware Uploading on legacy chipsets
-            if self.computer.wifi:
-                if self.computer.wifi.chipset == device_probe.Broadcom.Chipsets.AirPortBrcm4360:
-                    logging.info("- Fixing Legacy Bluetooth for macOS Monterey")
-                    support.BuildSupport(self.model, self.constants, self.config).enable_kext("BlueToolFixup.kext", self.constants.bluetool_version, self.constants.bluetool_path)
+            if (
+                self.computer.wifi
+                and self.computer.wifi.chipset
+                == device_probe.Broadcom.Chipsets.AirPortBrcm4360
+            ):
+                logging.info("- Fixing Legacy Bluetooth for macOS Monterey")
+                support.BuildSupport(self.model, self.constants, self.config).enable_kext("BlueToolFixup.kext", self.constants.bluetool_version, self.constants.bluetool_path)
         elif self.computer.bluetooth_chipset == "3rd Party Bluetooth 4.0 Hub":
             logging.info("- Detected 3rd Party Bluetooth Chipset")
             support.BuildSupport(self.model, self.constants, self.config).enable_kext("BlueToolFixup.kext", self.constants.bluetool_version, self.constants.bluetool_path)
@@ -65,9 +68,9 @@ class BuildBluetooth:
         Fall back to pre-built assumptions
         """
 
-        if not self.model in smbios_data.smbios_dictionary:
+        if self.model not in smbios_data.smbios_dictionary:
             return
-        if not "Bluetooth Model" in smbios_data.smbios_dictionary[self.model]:
+        if "Bluetooth Model" not in smbios_data.smbios_dictionary[self.model]:
             return
 
         if smbios_data.smbios_dictionary[self.model]["Bluetooth Model"] <= bluetooth_data.bluetooth_data.BRCM20702_v1.value:
